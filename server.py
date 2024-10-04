@@ -1,13 +1,14 @@
 # Based on the Twilio Media Stream Server example from OpenAI
 # See https://github.com/twilio-samples/speech-assistant-openai-realtime-api-node
 
-import base64
-import os
 import asyncio
-import websockets
+import base64
 import json
+import os
 import uuid
 
+import aiofiles
+import websockets
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse
@@ -77,7 +78,12 @@ async def media_stream(websocket: WebSocket):
     recording_filename = f'recording_{recording_id}.ulaw'
 
     # Open the file in binary write mode
-    audio_file = open(recording_filename, 'wb')
+    audio_file = await aiofiles.open(recording_filename, mode='wb')
+    # Create asyncio queue to hold audio chunks from both Twilio and OpenAI
+    audio_queue = asyncio.Queue()
+
+    # Start background task to write combined audio data to a single file asynchronously
+    writer_task = asyncio.create_task(_write_audio_from_queue(audio_queue, recording_filename))
 
     # Connect to OpenAI Realtime API
     openai_ws = await websockets.connect(
@@ -122,7 +128,8 @@ async def media_stream(websocket: WebSocket):
 
                         # Decode the base64-encoded audio and write it to the file
                         decoded_audio = base64.b64decode(audio_payload)
-                        audio_file.write(decoded_audio)
+                        # Queue the audio for background writing
+                        await audio_queue.put(decoded_audio)
 
                         audio_append = {
                             'type': 'input_audio_buffer.append',
@@ -140,7 +147,7 @@ async def media_stream(websocket: WebSocket):
             print('Error parsing message:', e)
         finally:
             # Close the audio file when done
-            audio_file.close()
+            await audio_file.close()
             await openai_ws.close()
 
             # Optionally, convert the recording to WAV format
@@ -186,7 +193,8 @@ async def media_stream(websocket: WebSocket):
 
                         # Decode the base64-encoded audio and write it to the file
                         decoded_audio = base64.b64decode(audio_payload)
-                        audio_file.write(decoded_audio)
+                        # Queue the audio for background writing
+                        await audio_queue.put(decoded_audio)
                 except Exception as e:
                     print('Error processing OpenAI message:', e, 'Raw message:', data)
         except Exception as e:
@@ -205,6 +213,8 @@ async def media_stream(websocket: WebSocket):
     for task in pending:
         task.cancel()
 
+    await writer_task
+
     print('Client disconnected.')
 
 
@@ -215,6 +225,18 @@ async def call_status(request: Request):
     print('Call Status Update:', data)
     return {'message': 'Call status received'}
 
+
+# Auxiliary functions ---------------------------------------------------------
+
+async def _write_audio_from_queue(queue, filename):
+    """Helper function to write audio data from a queue"""
+    async with aiofiles.open(filename, mode='wb') as audio_file:
+        while True:
+            audio_chunk = await queue.get()
+            if audio_chunk is None:
+                break
+            # Write combined audio to the file asynchronously
+            await audio_file.write(audio_chunk)
 
 # Run the app
 if __name__ == '__main__':
