@@ -2,6 +2,18 @@
 
 ## Installation
 
+Dependencies:
+- Python
+- ffmpeg with mulaw codec
+
+### Ubuntu
+Install the dependencies:
+```bash
+sudo apt-get install python3 python3-venv
+sudo apt-get install ffmpeg
+sudo apt-get install libavcodec-extra
+```
+
 Create a virtual environment and activate it:
 ```bash
 python -m venv venv

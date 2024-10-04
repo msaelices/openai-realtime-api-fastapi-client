@@ -1,10 +1,12 @@
 # Based on the Twilio Media Stream Server example from OpenAI
 # See https://github.com/twilio-samples/speech-assistant-openai-realtime-api-node
 
+import base64
 import os
 import asyncio
 import websockets
 import json
+import uuid
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -50,6 +52,8 @@ async def root():
 @app.api_route('/incoming-call', methods=['GET', 'POST'])
 async def incoming_call(request: Request):
     host = request.headers.get('host')
+    form = await request.form()
+    print('Incoming Call:', form)
     twiml_response = f'''<?xml version='1.0' encoding='UTF-8'?>
 <Response>
     <Say>Please wait while we connect your call to the A. I. voice assistant, powered by Twilio and the Open-A.I. Realtime API</Say>
@@ -67,6 +71,13 @@ async def incoming_call(request: Request):
 async def media_stream(websocket: WebSocket):
     print('Client connected')
     await websocket.accept()
+
+    # Generate a unique identifier for the recording
+    recording_id = str(uuid.uuid4())
+    recording_filename = f'recording_{recording_id}.ulaw'
+
+    # Open the file in binary write mode
+    audio_file = open(recording_filename, 'wb')
 
     # Connect to OpenAI Realtime API
     openai_ws = await websockets.connect(
@@ -107,9 +118,15 @@ async def media_stream(websocket: WebSocket):
 
                 if event == 'media':
                     if openai_ws.open:
+                        audio_payload = data['media']['payload']
+
+                        # Decode the base64-encoded audio and write it to the file
+                        decoded_audio = base64.b64decode(audio_payload)
+                        audio_file.write(decoded_audio)
+
                         audio_append = {
                             'type': 'input_audio_buffer.append',
-                            'audio': data['media']['payload']
+                            'audio': audio_payload
                         }
                         await openai_ws.send(json.dumps(audio_append))
                 elif event == 'start':
@@ -122,7 +139,27 @@ async def media_stream(websocket: WebSocket):
         except Exception as e:
             print('Error parsing message:', e)
         finally:
+            # Close the audio file when done
+            audio_file.close()
             await openai_ws.close()
+
+            # Optionally, convert the recording to WAV format
+            try:
+                from pydub import AudioSegment
+                audio = AudioSegment.from_file(
+                    recording_filename,
+                    codec='mulaw',
+                    sample_width=2,
+                    frame_rate=8000,
+                    channels=1,
+                )
+                wav_filename = f'recording_{recording_id}.wav'
+                audio.export(wav_filename, format='wav')
+                print(f'Recording saved as {wav_filename}')
+                # Optionally, delete the .ulaw file
+                os.remove(recording_filename)
+            except Exception as e:
+                print('Error converting recording to WAV:', e)
 
     # Listen for messages from the OpenAI WebSocket
     async def openai_to_twilio():
@@ -168,7 +205,7 @@ async def media_stream(websocket: WebSocket):
 # Webhook for call status updates
 @app.post('/call-status')
 async def call_status(request: Request):
-    data = await request.json()
+    data = await request.body()
     print('Call Status Update:', data)
     return {'message': 'Call status received'}
 
