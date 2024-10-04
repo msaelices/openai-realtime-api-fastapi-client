@@ -77,8 +77,6 @@ async def media_stream(websocket: WebSocket):
     recording_id = str(uuid.uuid4())
     recording_filename = f'recording_{recording_id}.ulaw'
 
-    # Open the file in binary write mode
-    audio_file = await aiofiles.open(recording_filename, mode='wb')
     # Create asyncio queue to hold audio chunks from both Twilio and OpenAI
     audio_queue = asyncio.Queue()
 
@@ -147,7 +145,6 @@ async def media_stream(websocket: WebSocket):
             print('Error parsing message:', e)
         finally:
             # Close the audio file when done
-            await audio_file.close()
             await openai_ws.close()
 
             # Optionally, convert the recording to WAV format
@@ -156,7 +153,6 @@ async def media_stream(websocket: WebSocket):
                 audio = AudioSegment.from_file(
                     recording_filename,
                     codec='pcm_mulaw',
-                    sample_width=2,
                     frame_rate=8000,
                     channels=1,
                 )
