@@ -175,12 +175,18 @@ async def media_stream(websocket: WebSocket):
                         print('Session updated successfully:', response)
 
                     if response['type'] == 'response.audio.delta' and 'delta' in response:
+                        audio_payload = response['delta']
+
                         audio_delta = {
                             'event': 'media',
                             'streamSid': stream_sid,
-                            'media': {'payload': response['delta']}
+                            'media': {'payload': audio_payload}
                         }
                         await websocket.send_text(json.dumps(audio_delta))
+
+                        # Decode the base64-encoded audio and write it to the file
+                        decoded_audio = base64.b64decode(audio_payload)
+                        audio_file.write(decoded_audio)
                 except Exception as e:
                     print('Error processing OpenAI message:', e, 'Raw message:', data)
         except Exception as e:
