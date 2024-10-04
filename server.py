@@ -39,10 +39,12 @@ LOG_EVENT_TYPES = [
     'session.created'
 ]
 
+
 # Root Route
 @app.get('/')
 async def root():
     return {'message': 'Twilio Media Stream Server is running!'}
+
 
 # Route for Twilio to handle incoming and outgoing calls
 @app.api_route('/incoming-call', methods=['GET', 'POST'])
@@ -58,6 +60,7 @@ async def incoming_call(request: Request):
     </Connect>
 </Response>'''
     return PlainTextResponse(content=twiml_response, media_type='text/xml')
+
 
 # WebSocket route for media-stream
 @app.websocket('/media-stream')
@@ -160,6 +163,15 @@ async def media_stream(websocket: WebSocket):
         task.cancel()
 
     print('Client disconnected.')
+
+
+# Webhook for call status updates
+@app.post('/call-status')
+async def call_status(request: Request):
+    data = await request.json()
+    print('Call Status Update:', data)
+    return {'message': 'Call status received'}
+
 
 # Run the app
 if __name__ == '__main__':
