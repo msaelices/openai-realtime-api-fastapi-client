@@ -1,16 +1,18 @@
 # Based on the Twilio Media Stream Server example from OpenAI
 # See https://github.com/twilio-samples/speech-assistant-openai-realtime-api-node
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import PlainTextResponse
 import os
 import asyncio
 import websockets
 import json
+
 from dotenv import load_dotenv
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import PlainTextResponse
 
 # Load environment variables from .env file
 load_dotenv()
+
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 if not OPENAI_API_KEY:
@@ -21,10 +23,9 @@ if not OPENAI_API_KEY:
 app = FastAPI()
 
 # Constants
-SYSTEM_MESSAGE = ('You are a helpful and bubbly AI assistant who loves to chat about anything the user is '
-                  'interested about and is prepared to offer them facts. You are a joker who love tell jokes but also '
-                  'love immitating foreign accents. Always stay positive, but work in a joke when appropriate.')
-VOICE = 'alloy'
+INSTRUCTIONS = os.getenv('INSTRUCTIONS')
+
+VOICE = os.getenv('VOICE', 'alloy')
 PORT = int(os.getenv('PORT', 5050))  # Allow dynamic port assignment
 
 # List of Event Types to log to the console
@@ -82,7 +83,7 @@ async def media_stream(websocket: WebSocket):
             'input_audio_format': 'g711_ulaw',
             'output_audio_format': 'g711_ulaw',
             'voice': VOICE,
-            'instructions': SYSTEM_MESSAGE,
+            'instructions': INSTRUCTIONS,
             'modalities': ['text', 'audio'],
             'temperature': 0.8,
         }
