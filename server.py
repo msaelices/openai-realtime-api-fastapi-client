@@ -151,10 +151,11 @@ async def media_stream(websocket: WebSocket):
             try:
                 from pydub import AudioSegment
                 audio = AudioSegment.from_file(
-                    recording_filename,
+                    format='mulaw',
                     codec='pcm_mulaw',
-                    frame_rate=8000,
+                    file=recording_filename,
                     channels=1,
+                    # parameters=['-ar', '8000'],
                 )
                 wav_filename = f'recording_{recording_id}.wav'
                 audio.export(wav_filename, format='wav')
