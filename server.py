@@ -58,8 +58,8 @@ async def incoming_call(request: Request):
     print('Incoming Call:', form)
     twiml_response = f'''<?xml version='1.0' encoding='UTF-8'?>
 <Response>
-    <Say>Please wait while we connect your call to the A. I. voice assistant, powered by Twilio and the Open-A.I. Realtime API</Say>
-    <Pause length='1'/>
+    <Say>Please wait while we connect your call to the A. I. voice assistant, powered by Twilio and the Open-A.I. Realtime API</Say>                                                              
+    <Pause length='1'/>                                                                                                                                                                           
     <Say>O.K. you can start talking!</Say>
     <Connect>
         <Stream url='wss://{host}/media-stream' />
@@ -125,16 +125,13 @@ async def media_stream(websocket: WebSocket):
                     if openai_ws.open:
                         audio_payload = data['media']['payload']
 
-                        # Decode the base64-encoded audio and write it to the file
-                        decoded_audio = base64.b64decode(audio_payload)
-                        # Queue the audio for background writing
-                        await audio_queue.put(decoded_audio)
-
                         audio_append = {
                             'type': 'input_audio_buffer.append',
                             'audio': audio_payload
                         }
                         await openai_ws.send(json.dumps(audio_append))
+
+                        await _add_to_audio_queue(audio_queue, audio_payload)
                 elif event == 'start':
                     stream_sid = data['start']['streamSid']
                     print('Incoming stream has started', stream_sid)
@@ -195,10 +192,8 @@ async def media_stream(websocket: WebSocket):
                         }
                         await websocket.send_text(json.dumps(audio_delta))
 
-                        # Decode the base64-encoded audio and write it to the file
-                        decoded_audio = base64.b64decode(audio_payload)
-                        # Queue the audio for background writing
-                        await audio_queue.put(decoded_audio)
+                        await _add_to_audio_queue(audio_queue, audio_payload)
+
                 except Exception as e:
                     print('Error processing OpenAI message:', e, 'Raw message:', data)
         except Exception as e:
@@ -209,7 +204,7 @@ async def media_stream(websocket: WebSocket):
     # Run both tasks concurrently
     tasks = [
         asyncio.create_task(twilio_to_openai()),
-        asyncio.create_task(openai_to_twilio())
+        asyncio.create_task(openai_to_twilio()),
     ]
 
     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
@@ -232,6 +227,12 @@ async def call_status(request: Request):
 
 # Auxiliary functions ---------------------------------------------------------
 
+async def _add_to_audio_queue(audio_queue, audio_payload):
+    """Queue audio data for writing to a file asynchronously"""
+    decoded_audio = base64.b64decode(audio_payload)
+    await audio_queue.put(decoded_audio)
+
+
 async def _write_audio_from_queue(queue, filename):
     """Helper function to write audio data from a queue"""
     async with aiofiles.open(filename, mode='wb') as audio_file:
@@ -241,6 +242,7 @@ async def _write_audio_from_queue(queue, filename):
                 break
             # Write combined audio to the file asynchronously
             await audio_file.write(audio_chunk)
+
 
 # Run the app
 if __name__ == '__main__':
