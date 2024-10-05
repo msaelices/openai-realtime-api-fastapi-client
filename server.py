@@ -5,6 +5,7 @@ import asyncio
 import base64
 import json
 import os
+import subprocess
 import uuid
 
 import aiofiles
@@ -149,16 +150,22 @@ async def media_stream(websocket: WebSocket):
 
             # Optionally, convert the recording to WAV format
             try:
-                from pydub import AudioSegment
-                audio = AudioSegment.from_file(
-                    format='mulaw',
-                    codec='pcm_mulaw',
-                    file=recording_filename,
-                    channels=1,
-                    # parameters=['-ar', '8000'],
-                )
                 wav_filename = f'recording_{recording_id}.wav'
-                audio.export(wav_filename, format='wav')
+                conversion_command = ['ffmpeg', '-f', 'mulaw', '-ar', '8000', '-ac', '1', '-i', recording_filename, '-f', 'wav', wav_filename]
+                p = subprocess.Popen(
+                    conversion_command,
+                    stdin=None,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                p_out, p_err = p.communicate()
+
+                if p.returncode != 0 or len(p_out) == 0:
+                    raise Exception(
+                        'Decoding failed. ffmpeg returned error code: {0}\n\nOutput from ffmpeg/avlib:\n\n{1}'.format(
+                            p.returncode, p_err.decode(errors='ignore') 
+                        )
+                    )
                 print(f'Recording saved as {wav_filename}')
                 # Optionally, delete the .ulaw file
                 os.remove(recording_filename)
