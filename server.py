@@ -18,6 +18,7 @@ from fastapi.responses import PlainTextResponse
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
 
 if not OPENAI_API_KEY:
     print('Missing OpenAI API key. Please set it in the .env file.')
@@ -205,7 +206,7 @@ async def media_stream(websocket: WebSocket):
                 try:
                     response = json.loads(data)
 
-                    if response['type'] in LOG_EVENT_TYPES:
+                    if DEBUG or response['type'] in LOG_EVENT_TYPES:
                         print(f'Received event: {response["type"]}', response)
 
                     if response['type'] == 'session.updated':
