@@ -43,3 +43,15 @@ cp .env-template .env
 ```bash
 python server.py 
 ```
+
+## Usage
+
+1. Login in the Twilio console and buy a phone number.
+
+2. Configure the phone number to use the webhook URLs of your FastAPI server:
+  - A Call Comes In -> Webhook -> http://your-server-url/incoming-call
+  - Call Status Changes -> Webhook -> http://your-server-url/call-status
+
+    Note: You can use tools like ngrok to expose your local server to the internet.
+
+3. Call the phone number and speak with the AI Assistant.
