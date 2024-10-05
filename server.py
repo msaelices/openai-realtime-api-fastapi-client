@@ -35,6 +35,7 @@ PORT = int(os.getenv('PORT', 5050))  # Allow dynamic port assignment
 # List of Event Types to log to the console
 LOG_EVENT_TYPES = [
     'response.content.done',
+    'response.function_call_arguments.done',
     'rate_limits.updated',
     'response.done',
     'input_audio_buffer.committed',
@@ -104,6 +105,34 @@ async def media_stream(websocket: WebSocket):
             'instructions': INSTRUCTIONS,
             'modalities': ['text', 'audio'],
             'temperature': 0.8,
+            'tools': [
+                {
+                    'name': 'get_weather',
+                    'type': 'function',
+                        'description': 'Determine weather in my location',
+                        'parameters': {
+                            'type': 'object',
+                            'properties': {
+                                'location': {
+                                    'type': 'string',
+                                    'description': 'The city and state e.g. San Francisco, CA'
+                                },
+                                'unit': {
+                                    'type': 'string',
+                                    'enum': [
+                                      'c',
+                                      'f'
+                                    ]
+                                }
+                            },
+                            'additionalProperties': False,
+                            'required': [
+                              'location',
+                              'unit'
+                            ]
+                        }
+                },
+            ]
         }
     }
     print('Sending session update:', json.dumps(session_update))
@@ -192,6 +221,34 @@ async def media_stream(websocket: WebSocket):
                         await websocket.send_text(json.dumps(audio_delta))
 
                         await _add_to_audio_queue(audio_queue, audio_payload)
+
+                    # Example of payload:
+                    # {
+                    #   'type': 'response.function_call_arguments.done',
+                    #   'event_id': 'event_AF7Dkj55SjZfkHiNDCzSD',
+                    #   'response_id': 'resp_AF7DkY3MyjvEyx9uu4Iz2',
+                    #   'item_id': 'item_AF7DknCfk0nDUudzHEzBX',
+                    #   'output_index': 0,
+                    #   'call_id': 'call_M6sCISvlwIAiO3hG',
+                    #   'name': 'get_weather',
+                    #   'arguments': '{"location":"Madrid","unit":"c"}'
+                    # }
+                    if response['type'] == 'response.function_call_arguments.done':
+                        item_id = uuid.uuid4().hex
+                        tool_response = {
+                            'id': item_id,
+                            'call_id': response['call_id'],
+                            'type': 'function_call_output',
+                            'output': 'It is rainy and with 25ºC',
+                        }
+                        event = {
+                            'event_id': item_id,
+                            'type': 'conversation.item.create',
+                            'item': tool_response,
+                        }
+                        print('\nResponding with tool response:', event)
+                        await openai_ws.send(json.dumps(event))
+
 
                 except Exception as e:
                     print('Error processing OpenAI message:', e, 'Raw message:', data)
